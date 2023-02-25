@@ -1,0 +1,1 @@
+//!submodule embedded_module
