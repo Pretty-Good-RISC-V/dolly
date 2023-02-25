@@ -1,21 +1,16 @@
-use log::{error, warn, trace};
-use regex::Regex;
-use std::{
-    fs,
-    collections::HashSet,
-    path,
-    process,
-};
 use super::project::Project;
+use log::{error, trace, warn};
+use regex::Regex;
+use std::{collections::HashSet, fs, path, process};
 
-struct TestDefinition {
+struct BuildTarget {
     path: path::PathBuf,
     top_module: Option<String>, // Top module found in test (or the default top module name if None)
 }
 
 pub struct Builder {
     modules: HashSet<path::PathBuf>,
-    tests: Vec<TestDefinition>,
+    tests: Vec<BuildTarget>,
 }
 
 impl Builder {
@@ -26,11 +21,17 @@ impl Builder {
         }
     }
 
-    pub fn find_dependencies(_project: &Project, build: Builder) -> Result<Builder, Box<dyn std::error::Error>> {
+    pub fn find_dependencies(
+        _project: &Project,
+        build: Builder,
+    ) -> Result<Builder, Box<dyn std::error::Error>> {
         Ok(build)
     }
 
-    pub fn find_modules(project: &Project, builder: Builder) -> Result<Builder, Box<dyn std::error::Error>> {
+    pub fn find_modules(
+        project: &Project,
+        builder: Builder,
+    ) -> Result<Builder, Box<dyn std::error::Error>> {
         let mut builder = builder;
         let re = Regex::new(r"//!submodule\s+(\w*)\s*")?;
 
@@ -46,15 +47,13 @@ impl Builder {
             let mod_dot_bsv = current_module_path.join("mod.bsv");
             if mod_dot_bsv.exists() {
                 // Open the file and look for modules that haven't been encountered
-                let submodules: HashSet<path::PathBuf> = fs::read_to_string(mod_dot_bsv)?.lines().into_iter()
+                let submodules: HashSet<path::PathBuf> = fs::read_to_string(mod_dot_bsv)?
+                    .lines()
+                    .into_iter()
                     // map from &str -> Option<Capture> matching the regex
-                    .flat_map(|line| {
-                        re.captures(line)
-                    })
+                    .flat_map(|line| re.captures(line))
                     // Map from capture to the local module path
-                    .map(|capture| {
-                        current_module_path.join(&capture[1])
-                    })
+                    .map(|capture| current_module_path.join(&capture[1]))
                     // Filter out paths that have already been encountered
                     .filter(|module_path| !builder.modules.contains(module_path))
                     // Collect the results
@@ -74,13 +73,11 @@ impl Builder {
         let mut top_module = None;
 
         if let Ok(contents) = fs::read_to_string(path) {
-            let top_modules: Vec<String> = contents.lines().into_iter()
-                .flat_map(|line| {
-                    re.captures(line)
-                })
-                .map(|capture| {
-                    capture[1].to_string()
-                })
+            let top_modules: Vec<String> = contents
+                .lines()
+                .into_iter()
+                .flat_map(|line| re.captures(line))
+                .map(|capture| capture[1].to_string())
                 .collect();
 
             if !top_modules.is_empty() {
@@ -97,63 +94,131 @@ impl Builder {
         }
     }
 
-    pub fn find_tests(project: &Project, builder: Builder) -> Result<Builder, Box<dyn std::error::Error>> {
+    pub fn find_tests(
+        project: &Project,
+        builder: Builder,
+    ) -> Result<Builder, Box<dyn std::error::Error>> {
         let mut builder = builder;
         let re = Regex::new(r"//!topmodule\s+(\w*)\s*")?;
 
-        builder.tests = project.root_path().join("tests")
+        builder.tests = project
+            .root_path()
+            .join("tests")
+            // read all files in the "tests" directory
             .read_dir()?
-            .flat_map(|dir_entry| dir_entry.map(|e| {
+            // filter out any Err variants
+            .filter(|dir_entry| dir_entry.is_ok())
+            // unwrap the paths inside the Ok variants (safe since Err variants were previously rejected)
+            .map(|dir_entry| dir_entry.unwrap().path()) 
+            // Filter out any paths that don't end in ".bsv"
+            .filter(|path| {
+                if let Some(extension) = path.extension() {
+                    if extension == "bsv" {
+                        true
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            })
+            // Change from PathBuf to BuildTarget
+            .map(|path_buf| {
                 // See if any top modules are defined in the file
-                let top_module: Option<String> = Self::find_top_module(&re, &e.path());
-                
-                TestDefinition {
-                    path: e.path(),
+                let top_module: Option<String> = Self::find_top_module(&re, &path_buf);
+
+                BuildTarget {
+                    path: path_buf,
                     top_module,
                 }
-            }))
+            })
             .inspect(|test_definition| trace!("Test found: {:?}", &test_definition.path))
             .collect();
 
         Ok(builder)
     }
 
-    pub fn build_tests(project: &Project, builder: Builder) -> Result<Builder, Box<dyn std::error::Error>> {
+    pub fn build_tests(
+        project: &Project,
+        builder: Builder,
+    ) -> Result<Builder, Box<dyn std::error::Error>> {
         let target_path = project.root_path().join("target");
         let mut error_output: Option<std::process::Output> = None;
 
+        //
+        // For each test...
+        //
         for test in &builder.tests {
+            // Create the path object inside the target directory that matches the test path stem.
             let test_build_path = target_path.join(test.path.file_stem().unwrap());
 
-            // Create the test build path if necessary
+            // Create the test build path if necessary.
             if !test_build_path.exists() {
                 fs::create_dir_all(&test_build_path)?;
             }
 
+            // Get the top module name from the test (or the default, if one wasn't found)
             let top_module = test.top_module.clone().unwrap_or("mkTopModule".to_string());
 
-            trace!("Top module for {}: {}", test.path.to_string_lossy(), top_module);
+            trace!(
+                "Top module for {}: {}",
+                test.path.to_string_lossy(),
+                top_module
+            );
 
+            // Compile
             let cmd = process::Command::new("bsc")
                 .current_dir(test_build_path.as_path())
+                // output directory for .bo and .ba files
+                .arg("-bdir")
+                .arg(&test_build_path)
+                // working directory for relative file paths during elaboration
+                .arg("-fdir")
+                .arg(&test_build_path)
+                // output directory for informational files
+                .arg("-info-dir")
+                .arg(&test_build_path)
+                // output directory for Bluesim intermediate files
+                .arg("-simdir")
+                .arg(&test_build_path)
+                // compile BSV generating Bluesim object
                 .arg("-sim")
+                // check and recompile packages that are not up to date
                 .arg("-u")
-                .arg("-e")
-                .arg(top_module)
                 .arg(&test.path)
-                .spawn()?
-                ;
+                .spawn()?;
+            trace!("Compile current dir: {:?}", test_build_path.as_path());
+            trace!("Compile source: {:?}", &test.path);
 
             let output = cmd.wait_with_output()?;
             if !output.status.success() {
-                error!("{}", std::str::from_utf8(output.stdout.as_slice()).unwrap());
+                error!("Compile failed {}", std::str::from_utf8(output.stdout.as_slice()).unwrap());
                 error_output = Some(output);
                 break;
             }
+
+            // Link
+            let cmd = process::Command::new("bsc")
+                .current_dir(test_build_path.as_path())
+                .arg("-sim")
+                .arg("-e")
+                .arg(top_module)
+//                .arg(&test.path)
+                .spawn()?;
+
+            let output = cmd.wait_with_output()?;
+            if !output.status.success() {
+                error!("Link failed: {}", std::str::from_utf8(output.stdout.as_slice()).unwrap());
+                error_output = Some(output);
+                break;
+            }    
         }
 
         if error_output.is_some() {
-            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, "bsc child process returned non-zero")))
+            Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "bsc child process returned non-zero",
+            )))
         } else {
             Ok(builder)
         }

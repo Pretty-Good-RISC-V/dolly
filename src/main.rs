@@ -3,9 +3,7 @@
 
 use clap::{Parser, Subcommand};
 use log::{error, trace};
-use std::{
-    path,
-};
+use std::path;
 
 mod builder;
 use builder::Builder;
@@ -28,10 +26,14 @@ enum Commands {
 
 fn find_project_file(starting_path: path::PathBuf) -> std::io::Result<path::PathBuf> {
     let full_path = starting_path.as_path().canonicalize()?;
-    let mut project_filename: std::io::Result<path::PathBuf> = Err(std::io::Error::from(std::io::ErrorKind::NotFound));
+    let mut project_filename: std::io::Result<path::PathBuf> =
+        Err(std::io::Error::from(std::io::ErrorKind::NotFound));
 
     for ancestor in full_path.ancestors() {
-        let test_path = path::PathBuf::from(ancestor).as_path().canonicalize()?.join("dollyect.toml");
+        let test_path = path::PathBuf::from(ancestor)
+            .as_path()
+            .canonicalize()?
+            .join("dolly.toml");
 
         trace!("Looking for project: {:?}", test_path);
 
@@ -50,7 +52,9 @@ fn find_project_file(starting_path: path::PathBuf) -> std::io::Result<path::Path
     project_filename
 }
 
-fn load_project(explicit_search_root: Option<path::PathBuf>) -> Result<Project, Box<dyn std::error::Error>> {
+fn load_project(
+    explicit_search_root: Option<path::PathBuf>,
+) -> Result<Project, Box<dyn std::error::Error>> {
     // Determine the path to begin the search.  If one was provided explicitly, use it; otherwise
     // use the current directory.
     let search_root = explicit_search_root.unwrap_or(path::PathBuf::from("."));
@@ -86,13 +90,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 #[cfg(test)]
 mod test {
-   use super::*;
+    use super::*;
 
     #[test]
     fn simple_build() -> Result<(), Box<dyn std::error::Error>> {
         let working_dir = std::env::current_dir().unwrap().join("examples/simple");
+
+        pretty_env_logger::init();
         std::env::set_var("RUST_LOG", "trace");
-        
+
         let project = load_project(Some(working_dir))?;
 
         Builder::find_dependencies(&project, Builder::new())
