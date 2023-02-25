@@ -109,7 +109,7 @@ impl Builder {
             // filter out any Err variants
             .filter(|dir_entry| dir_entry.is_ok())
             // unwrap the paths inside the Ok variants (safe since Err variants were previously rejected)
-            .map(|dir_entry| dir_entry.unwrap().path()) 
+            .map(|dir_entry| dir_entry.unwrap().path())
             // Filter out any paths that don't end in ".bsv"
             .filter(|path| {
                 if let Some(extension) = path.extension() {
@@ -166,7 +166,63 @@ impl Builder {
                 top_module
             );
 
+            // Module path creation
+            let mut module_path_string: std::ffi::OsString = "%:+".into();
+            let colon: std::ffi::OsString = ":".into();
+            for module in &builder.modules {
+                module_path_string.push(&colon);
+                module_path_string.push(module.as_os_str());
+            }
+
+            trace!(
+                "Module path string: {}",
+                &module_path_string.clone().into_string().unwrap()
+            );
+
             // Compile
+            let cmd = process::Command::new("bsc")
+                .current_dir(test_build_path.as_path())
+                // output directory for .bo and .ba files
+                .arg("-bdir")
+                .arg(&test_build_path)
+                // working directory for relative file paths during elaboration
+                // .arg("-fdir")
+                // .arg(&test_build_path)
+                // output directory for informational files
+                // .arg("-info-dir")
+                // .arg(&test_build_path)
+                // output directory for Bluesim intermediate files
+                // .arg("-simdir")
+                // .arg(&test_build_path)
+                // specify paths to modules/sources
+                .arg("-p")
+                .arg(module_path_string)
+                // compile BSV generating Bluesim object
+                .arg("-sim")
+                // check and recompile packages that are not up to date
+                .arg("-u")
+                // Specify a module to elaborate
+                .arg("-g")
+                .arg(&top_module)
+                // Sshhhh
+                .arg("-quiet")
+                // The source file
+                .arg(&test.path)
+                .spawn()?;
+            trace!("Compile current dir: {:?}", test_build_path.as_path());
+            trace!("Compile source: {:?}", &test.path);
+
+            let output = cmd.wait_with_output()?;
+            if !output.status.success() {
+                error!(
+                    "Compile failed {}",
+                    std::str::from_utf8(output.stdout.as_slice()).unwrap()
+                );
+                error_output = Some(output);
+                break;
+            }
+
+            // Link
             let cmd = process::Command::new("bsc")
                 .current_dir(test_build_path.as_path())
                 // output directory for .bo and .ba files
@@ -185,33 +241,24 @@ impl Builder {
                 .arg("-sim")
                 // check and recompile packages that are not up to date
                 .arg("-u")
-                .arg(&test.path)
+                .arg("-e")
+                .arg(top_module)
+                // name the resulting executable
+                .arg("-o")
+                .arg(test.path.as_path().file_stem().unwrap())
                 .spawn()?;
-            trace!("Compile current dir: {:?}", test_build_path.as_path());
-            trace!("Compile source: {:?}", &test.path);
+
+            trace!("Linking: {:?}", &test.path);
 
             let output = cmd.wait_with_output()?;
             if !output.status.success() {
-                error!("Compile failed {}", std::str::from_utf8(output.stdout.as_slice()).unwrap());
+                error!(
+                    "Link failed: {}",
+                    std::str::from_utf8(output.stdout.as_slice()).unwrap()
+                );
                 error_output = Some(output);
                 break;
             }
-
-            // Link
-            let cmd = process::Command::new("bsc")
-                .current_dir(test_build_path.as_path())
-                .arg("-sim")
-                .arg("-e")
-                .arg(top_module)
-//                .arg(&test.path)
-                .spawn()?;
-
-            let output = cmd.wait_with_output()?;
-            if !output.status.success() {
-                error!("Link failed: {}", std::str::from_utf8(output.stdout.as_slice()).unwrap());
-                error_output = Some(output);
-                break;
-            }    
         }
 
         if error_output.is_some() {
