@@ -1,5 +1,5 @@
 interface EmbeddedModule;
-    method Bool isEmbeddedModuleHookedUp
+    method Bool isEmbeddedModuleHookedUp;
 endinterface
 
 module mkEmbeddedModule(EmbeddedModule);

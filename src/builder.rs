@@ -206,6 +206,11 @@ impl Builder {
                 .arg(&top_module)
                 // Sshhhh
                 .arg("-quiet")
+                // Check assertions
+                .arg("-check-assert")
+
+//                .arg("-print-flags")
+
                 // The source file
                 .arg(&test.path)
                 .spawn()?;
@@ -223,7 +228,8 @@ impl Builder {
             }
 
             // Link
-            let cmd = process::Command::new("bsc")
+            let mut base_cmd = process::Command::new("bsc");
+            let cmd = base_cmd
                 .current_dir(test_build_path.as_path())
                 // output directory for .bo and .ba files
                 .arg("-bdir")
@@ -246,11 +252,20 @@ impl Builder {
                 // name the resulting executable
                 .arg("-o")
                 .arg(test.path.as_path().file_stem().unwrap())
-                .spawn()?;
+                // Sshhhh
+                .arg("-quiet")
+                ;
+
+            // Remove C++ warnings on Mac related to deprecated function usage (e.g. sprintf)
+            #[cfg(any(unix))]
+            let cmd = cmd.arg("-Xc++")
+                .arg("-Wno-deprecated-declarations");
+
+            let child = cmd.spawn()?;
 
             trace!("Linking: {:?}", &test.path);
 
-            let output = cmd.wait_with_output()?;
+            let output = child.wait_with_output()?;
             if !output.status.success() {
                 error!(
                     "Link failed: {}",

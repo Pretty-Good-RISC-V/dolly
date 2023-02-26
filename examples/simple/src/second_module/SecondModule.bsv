@@ -1,4 +1,5 @@
 interface SecondModule;
+    method Bool isSecondModuleHookedUp;
 endinterface
 
 module mkSecondModule(SecondModule);

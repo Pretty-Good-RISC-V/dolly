@@ -93,7 +93,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn simple_build() -> Result<(), Box<dyn std::error::Error>> {
+    fn simple_dot_bsv() -> Result<(), Box<dyn std::error::Error>> {
         let working_dir = std::env::current_dir().unwrap().join("examples/simple");
 
         pretty_env_logger::init();
