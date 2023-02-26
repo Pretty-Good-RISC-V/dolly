@@ -1,15 +1,19 @@
 //! dolly is a tool for building Bluespec SystemVerilog (BSV) projects.
 #![warn(missing_docs)]
 
+use convert_case::{Case, Casing};
 use clap::{Parser, Subcommand};
 use log::{error, trace};
-use std::path;
+use std::{io::Write,path};
 
 mod builder;
 use builder::Builder;
 
 mod project;
 use project::Project;
+
+const NAME: &str = env!("CARGO_PKG_NAME");
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -21,7 +25,9 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    Build { name: Option<path::PathBuf> },
+    Init { name: path::PathBuf },
+    Test { name: Option<path::PathBuf> },
+    Version,
 }
 
 fn find_project_file(starting_path: path::PathBuf) -> std::io::Result<path::PathBuf> {
@@ -73,7 +79,58 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
     match &cli.command {
-        Commands::Build { name } => {
+        Commands::Init { name } => {
+            // first, see if the path exists
+            if name.exists() {
+                error!("Unable to initialize new project. s{:?} already exists", name);
+                Err(Box::new(std::io::Error::from(std::io::ErrorKind::AlreadyExists)))
+            } else {
+                std::fs::create_dir_all(name.as_path().join("src"))?;
+                std::fs::create_dir_all(name.as_path().join("tests"))?;
+
+                let module_name = name.file_stem().unwrap().to_string_lossy().to_case(Case::UpperCamel);
+
+                // Create dolly.toml
+                write!(std::fs::File::create(name.as_path().join("dolly.toml"))?, r#"
+[package]
+name = {:?}
+version = "0.1.0"
+                "#, module_name)?;
+
+                // Create a simple module
+                let filename = format!("src/{}.bsv", module_name);
+                write!(std::fs::File::create(name.as_path().join(filename))?, r#"
+interface {};
+    method Bool isWorking;
+endinterface
+
+module mk{}({});
+    method Bool isWorking;
+        return True;
+    endmethod
+endmodule
+                "#, module_name, module_name, module_name)?;
+
+                // Create a simple test
+                let filename = format!("tests/{}_tb.bsv", module_name);
+                write!(std::fs::File::create(name.as_path().join(filename))?, r#"
+//!topmodule mk{}_tb
+import {}::*;
+
+module mk{}_tb(Empty);
+    {} my_module <- mk{};
+
+    rule run_it;
+        $display(">>>PASS");
+        $finish();
+    endrule
+endmodule
+                "#, module_name, module_name, module_name, module_name, module_name)?;
+
+                Ok(())
+            }
+        },
+        Commands::Test { name } => {
             let project = load_project(name.clone())?;
 
             trace!("Project loaded: {:?}", project);
@@ -81,8 +138,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Builder::find_dependencies(&project, Builder::new())
                 .and_then(|builder| Builder::find_modules(&project, builder))
                 .and_then(|builder: Builder| Builder::find_tests(&project, builder))
-                .and_then(|builder| Builder::build_tests(&project, builder))?;
+                .and_then(|builder| Builder::build_tests(&project, builder))
+                //.and_then(|builder| Builder::run_tests(&project, builder))
+                ?;
 
+            Ok(())
+        },
+        Commands::Version => {
+            print!("{} v{}", NAME, VERSION);
             Ok(())
         }
     }
