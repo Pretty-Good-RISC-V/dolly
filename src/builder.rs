@@ -1,7 +1,7 @@
 use super::project::Project;
 use log::{error, trace, warn};
 use regex::Regex;
-use std::{collections::HashSet, fs, path, process};
+use std::{collections::HashSet, fs, path, process, str};
 
 struct BuildTarget {
     path: path::PathBuf,
@@ -138,7 +138,7 @@ impl Builder {
         Ok(builder)
     }
 
-    pub fn build_tests(
+    pub fn run_tests(
         project: &Project,
         builder: Builder,
     ) -> Result<Builder, Box<dyn std::error::Error>> {
@@ -273,6 +273,33 @@ impl Builder {
                 );
                 error_output = Some(output);
                 break;
+            }
+
+            // Run test
+            let test_executable = test.path.as_path().file_stem().unwrap();
+            trace!("Testing: {:?}", &test_executable);
+            let child = process::Command::new("/bin/sh")
+                .arg(test_executable)
+                .current_dir(test_build_path.as_path())
+                .spawn()?;
+            let output = child.wait_with_output()?;
+            if !output.status.success() {
+                error!(
+                    "Link failed: {}",
+                    std::str::from_utf8(output.stdout.as_slice()).unwrap()
+                );
+                error_output = Some(output);
+                break;
+            } else {
+                // Search stdout for ">>>PASS" to see if the test succeeded.
+                let stdout = str::from_utf8(output.stdout.as_slice())?;
+                if stdout.ends_with(">>>PASS") {
+                    print!("Test: {} passed.", test.path.file_stem().unwrap().to_string_lossy());
+                } else {
+                    error_output = Some(output);
+                    break;
+                }
+
             }
         }
 

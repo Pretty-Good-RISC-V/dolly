@@ -121,6 +121,7 @@ module mk{}_tb(Empty);
     {} my_module <- mk{};
 
     rule run_it;
+        // Required for test to pass.
         $display(">>>PASS");
         $finish();
     endrule
@@ -138,8 +139,7 @@ endmodule
             Builder::find_dependencies(&project, Builder::new())
                 .and_then(|builder| Builder::find_modules(&project, builder))
                 .and_then(|builder: Builder| Builder::find_tests(&project, builder))
-                .and_then(|builder| Builder::build_tests(&project, builder))
-                //.and_then(|builder| Builder::run_tests(&project, builder))
+                .and_then(|builder| Builder::run_tests(&project, builder))
                 ?;
 
             Ok(())
@@ -167,7 +167,7 @@ mod test {
         Builder::find_dependencies(&project, Builder::new())
             .and_then(|builder| Builder::find_modules(&project, builder))
             .and_then(|builder: Builder| Builder::find_tests(&project, builder))
-            .and_then(|builder| Builder::build_tests(&project, builder))?;
+            .and_then(|builder| Builder::run_tests(&project, builder))?;
 
         Ok(())
     }
