@@ -1,4 +1,5 @@
 use super::project::Project;
+use colored::Colorize;
 use log::{error, trace, warn};
 use regex::Regex;
 use std::{collections::HashSet, fs, path, process, str};
@@ -167,7 +168,7 @@ impl Builder {
             );
 
             // Module path creation
-            let mut module_path_string: std::ffi::OsString = "%:+".into();
+            let mut module_path_string: std::ffi::OsString = "%/Libraries:".into();
             let colon: std::ffi::OsString = ":".into();
             for module in &builder.modules {
                 module_path_string.push(&colon);
@@ -181,7 +182,6 @@ impl Builder {
 
             // Compile
             let cmd = process::Command::new("bsc")
-                .current_dir(test_build_path.as_path())
                 // output directory for .bo and .ba files
                 .arg("-bdir")
                 .arg(&test_build_path)
@@ -203,6 +203,7 @@ impl Builder {
                 // The source file
                 .arg(&test.path)
                 .spawn()?;
+
             trace!("Compile current dir: {:?}", test_build_path.as_path());
             trace!("Compile source: {:?}", &test.path);
 
@@ -218,8 +219,9 @@ impl Builder {
 
             // Link
             let mut base_cmd = process::Command::new("bsc");
+            let output_file = test_build_path.join(test.path.as_path().file_stem().unwrap());
+
             let cmd = base_cmd
-                .current_dir(test_build_path.as_path())
                 // output directory for .bo and .ba files
                 .arg("-bdir")
                 .arg(&test_build_path)
@@ -240,7 +242,7 @@ impl Builder {
                 .arg(top_module)
                 // name the resulting executable
                 .arg("-o")
-                .arg(test.path.as_path().file_stem().unwrap())
+                .arg(output_file)
                 // Sshhhh
                 .arg("-quiet");
 
@@ -292,14 +294,16 @@ impl Builder {
                 // Search stdout for ">>>PASS" to see if the test succeeded.
                 let stdout = str::from_utf8(output.stdout.as_slice())?;
                 if stdout.contains(">>>PASS") {
-                    print!(
-                        "Test: {} passed.",
-                        test.path.file_stem().unwrap().to_string_lossy()
+                    println!(
+                        "Test: {} -- {}.",
+                        test.path.file_stem().unwrap().to_string_lossy(),
+                        "PASSED".green()
                     );
                 } else {
-                    print!(
-                        "Test: {} failed.",
-                        test.path.file_stem().unwrap().to_string_lossy()
+                    println!(
+                        "Test: {} -- {}.",
+                        test.path.file_stem().unwrap().to_string_lossy(),
+                        "FAILED".red().bold()
                     );
                     error_output = Some(output);
                     break;
