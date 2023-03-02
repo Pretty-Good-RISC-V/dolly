@@ -185,15 +185,6 @@ impl Builder {
                 // output directory for .bo and .ba files
                 .arg("-bdir")
                 .arg(&test_build_path)
-                // working directory for relative file paths during elaboration
-                // .arg("-fdir")
-                // .arg(&test_build_path)
-                // output directory for informational files
-                // .arg("-info-dir")
-                // .arg(&test_build_path)
-                // output directory for Bluesim intermediate files
-                // .arg("-simdir")
-                // .arg(&test_build_path)
                 // specify paths to modules/sources
                 .arg("-p")
                 .arg(module_path_string)
@@ -278,14 +269,25 @@ impl Builder {
             // Run test
             let test_executable = test.path.as_path().file_stem().unwrap();
             trace!("Testing: {:?}", &test_executable);
-            let child = process::Command::new("/bin/sh")
-                .arg(test_executable)
-                .current_dir(test_build_path.as_path())
-                .spawn()?;
-            let output = child.wait_with_output()?;
+            let output = if cfg!(target_os = "windows") {
+                std::process::Command::new("cmd")
+                    .arg("/C")
+                    .arg(test_executable)
+                    .current_dir(test_build_path.as_path())
+                    .output()?
+            } else {
+                let executable = format!("./{}", test_executable.to_str().unwrap());
+
+                std::process::Command::new("sh")
+                    .arg("-c")
+                    .arg(executable)
+                    .current_dir(test_build_path.as_path())
+                    .output()?
+            };
+            
             if !output.status.success() {
                 error!(
-                    "Link failed: {}",
+                    "Test failed: {}",
                     std::str::from_utf8(output.stdout.as_slice()).unwrap()
                 );
                 error_output = Some(output);
@@ -293,13 +295,13 @@ impl Builder {
             } else {
                 // Search stdout for ">>>PASS" to see if the test succeeded.
                 let stdout = str::from_utf8(output.stdout.as_slice())?;
-                if stdout.ends_with(">>>PASS") {
+                if stdout.contains(">>>PASS") {
                     print!("Test: {} passed.", test.path.file_stem().unwrap().to_string_lossy());
                 } else {
+                    print!("Test: {} failed.", test.path.file_stem().unwrap().to_string_lossy());
                     error_output = Some(output);
                     break;
                 }
-
             }
         }
 

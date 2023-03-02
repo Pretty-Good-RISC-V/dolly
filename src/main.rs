@@ -1,3 +1,4 @@
+
 //! dolly is a tool for building Bluespec SystemVerilog (BSV) projects.
 #![warn(missing_docs)]
 
