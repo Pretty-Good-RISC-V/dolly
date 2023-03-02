@@ -61,20 +61,25 @@ impl Project {
             // Create dolly.toml
             write!(
                 std::fs::File::create(new_project_path.as_path().join("dolly.toml"))?,
-                r#"
-[package]
+                r#"[package]
 name = {:?}
 version = "0.1.0"
-            "#,
+"#,
                 module_name
+            )?;
+
+            // Create simple .gitignore
+            write!(
+                std::fs::File::create(new_project_path.as_path().join(".gitignore"))?,
+                r#"**/target
+"#
             )?;
 
             // Create a simple module
             let filename = format!("src/{}.bsv", module_name);
             write!(
                 std::fs::File::create(new_project_path.as_path().join(filename))?,
-                r#"
-interface {};
+                r#"interface {};
     method Bool isWorking;
 endinterface
 
@@ -83,7 +88,7 @@ module mk{}({});
         return True;
     endmethod
 endmodule
-            "#,
+"#,
                 module_name,
                 module_name,
                 module_name
@@ -93,8 +98,7 @@ endmodule
             let filename = format!("tests/{}_tb.bsv", module_name);
             write!(
                 std::fs::File::create(new_project_path.as_path().join(filename))?,
-                r#"
-//!topmodule mk{}_tb
+                r#"//!topmodule mk{}_tb
 import {}::*;
 
 module mk{}_tb(Empty);
@@ -106,7 +110,7 @@ module mk{}_tb(Empty);
         $finish();
     endrule
 endmodule
-            "#,
+"#,
                 module_name,
                 module_name,
                 module_name,
