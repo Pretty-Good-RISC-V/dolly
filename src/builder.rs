@@ -199,9 +199,7 @@ impl Builder {
                 .arg("-quiet")
                 // Check assertions
                 .arg("-check-assert")
-
-//                .arg("-print-flags")
-
+                //                .arg("-print-flags")
                 // The source file
                 .arg(&test.path)
                 .spawn()?;
@@ -244,13 +242,11 @@ impl Builder {
                 .arg("-o")
                 .arg(test.path.as_path().file_stem().unwrap())
                 // Sshhhh
-                .arg("-quiet")
-                ;
+                .arg("-quiet");
 
             // Remove C++ warnings on Mac related to deprecated function usage (e.g. sprintf)
             #[cfg(any(unix))]
-            let cmd = cmd.arg("-Xc++")
-                .arg("-Wno-deprecated-declarations");
+            let cmd = cmd.arg("-Xc++").arg("-Wno-deprecated-declarations");
 
             let child = cmd.spawn()?;
 
@@ -284,7 +280,7 @@ impl Builder {
                     .current_dir(test_build_path.as_path())
                     .output()?
             };
-            
+
             if !output.status.success() {
                 error!(
                     "Test failed: {}",
@@ -296,9 +292,15 @@ impl Builder {
                 // Search stdout for ">>>PASS" to see if the test succeeded.
                 let stdout = str::from_utf8(output.stdout.as_slice())?;
                 if stdout.contains(">>>PASS") {
-                    print!("Test: {} passed.", test.path.file_stem().unwrap().to_string_lossy());
+                    print!(
+                        "Test: {} passed.",
+                        test.path.file_stem().unwrap().to_string_lossy()
+                    );
                 } else {
-                    print!("Test: {} failed.", test.path.file_stem().unwrap().to_string_lossy());
+                    print!(
+                        "Test: {} failed.",
+                        test.path.file_stem().unwrap().to_string_lossy()
+                    );
                     error_output = Some(output);
                     break;
                 }
