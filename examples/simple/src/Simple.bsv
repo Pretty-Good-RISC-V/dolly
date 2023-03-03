@@ -1,3 +1,5 @@
+//!submodule another_module
+//!submodule second_module
 import AnotherModule::*;
 import SecondModule::*;
 

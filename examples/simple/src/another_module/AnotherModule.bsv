@@ -1,3 +1,4 @@
+//!submodule embedded_module
 import EmbeddedModule::*;
 
 interface AnotherModule;

@@ -1,5 +1,6 @@
 use super::project::Project;
 use colored::Colorize;
+use convert_case::{Case, Casing};
 use log::{error, trace, warn};
 use regex::Regex;
 use std::{collections::HashSet, fs, path, process, str};
@@ -39,13 +40,23 @@ impl Builder {
         let mut remaining_paths = Vec::<path::PathBuf>::new();
         remaining_paths.push(project.root_path().join("src"));
 
+        let mut first_path = true;
         while !remaining_paths.is_empty() {
             let current_module_path = remaining_paths.pop().unwrap();
 
             trace!("Processing module {:?}", &current_module_path);
             builder.modules.insert(current_module_path.clone());
 
-            let mod_dot_bsv = current_module_path.join("mod.bsv");
+            let submodule_source = {
+                if first_path {
+                    first_path = false;
+                    format!("{}.bsv", project.package.name.to_case(Case::Pascal))
+                } else {
+                    format!("{}.bsv", current_module_path.file_stem().unwrap().to_string_lossy().to_case(Case::Pascal))
+                }
+            };
+
+            let mod_dot_bsv = current_module_path.join(submodule_source);
             if mod_dot_bsv.exists() {
                 // Open the file and look for modules that haven't been encountered
                 let submodules: HashSet<path::PathBuf> = fs::read_to_string(mod_dot_bsv)?
