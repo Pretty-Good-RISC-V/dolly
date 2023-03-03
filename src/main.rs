@@ -24,6 +24,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    Clean { name: Option<path::PathBuf> },
     Init { name: path::PathBuf },
     Test { name: Option<path::PathBuf> },
     Version,
@@ -78,6 +79,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
     match &cli.command {
+        Commands::Clean { name } => {
+            let project = load_project(name.clone())?;
+
+            project.clean()
+        },
         Commands::Init { name } => Project::init(name),
         Commands::Test { name } => {
             let project = load_project(name.clone())?;

@@ -22,6 +22,12 @@ impl Project {
         &self.root_path
     }
 
+    pub fn clean(&self) -> Result<(), Box<dyn std::error::Error>> {
+        // Ignore any errors from remove_dir_all()
+        let _ = fs::remove_dir_all(self.root_path.join("target"));
+        Ok(())
+    }
+
     pub fn load(project_file_name: path::PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
         trace!("Reading project file...");
         let contents = fs::read_to_string(&project_file_name)?;
