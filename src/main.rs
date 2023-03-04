@@ -83,19 +83,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let project = load_project(name.clone())?;
 
             project.clean()
-        },
+        }
         Commands::Init { name } => Project::init(name),
         Commands::Test { name } => {
             let project = load_project(name.clone())?;
 
             trace!("Project loaded: {:?}", project);
 
-            Builder::find_dependencies(&project, Builder::new())
+            let builder = Builder::find_dependencies(&project, Builder::new())
                 .and_then(|builder| Builder::find_modules(&project, builder))
                 .and_then(|builder: Builder| Builder::find_tests(&project, builder))
                 .and_then(|builder| Builder::run_tests(&project, builder))?;
 
-            Ok(())
+            if builder.all_tests_passed() {
+                Ok(())
+            } else {
+                Err(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "No all tests passed",
+                )))
+            }
         }
         Commands::Version => {
             print!("{} v{}", NAME, VERSION);
@@ -117,10 +124,14 @@ mod test {
 
         let project = load_project(Some(working_dir))?;
 
-        Builder::find_dependencies(&project, Builder::new())
+        let builder = Builder::find_dependencies(&project, Builder::new())
             .and_then(|builder| Builder::find_modules(&project, builder))
             .and_then(|builder: Builder| Builder::find_tests(&project, builder))
             .and_then(|builder| Builder::run_tests(&project, builder))?;
+
+        assert_eq!(builder.unit_test_count(), 1);
+        assert_eq!(builder.test_count(), 1);
+        assert_eq!(builder.all_tests_passed(), true);
 
         Ok(())
     }

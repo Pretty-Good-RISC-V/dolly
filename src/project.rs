@@ -75,10 +75,9 @@ version = "0.1.0"
             )?;
 
             // Create simple .gitignore
-            write!(
+            writeln!(
                 std::fs::File::create(new_project_path.as_path().join(".gitignore"))?,
-                r#"**/target
-"#
+                r"**/target"
             )?;
 
             // Create a simple module
