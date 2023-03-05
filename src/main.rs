@@ -24,6 +24,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    Build { name: Option<path::PathBuf> },
     Clean { name: Option<path::PathBuf> },
     Init { name: path::PathBuf },
     Test { name: Option<path::PathBuf> },
@@ -79,6 +80,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
     match &cli.command {
+        Commands::Build { name } => {
+            let project = load_project(name.clone())?;
+
+            trace!("Project loaded: {:?}", project);
+
+            Builder::find_dependencies(&project, Builder::new())
+                .and_then(|builder| Builder::find_modules(&project, builder))
+                .and_then(|builder: Builder| Builder::find_top_modules(&project, builder))
+                .and_then(|builder| Builder::build_verilog(&project, builder))?;
+
+            Ok(())
+        },
         Commands::Clean { name } => {
             let project = load_project(name.clone())?;
 
@@ -114,12 +127,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use std::sync::Once;
+
+    static INIT: Once = Once::new();
+    
+    /// Setup function that is only run once, even if called multiple times.
+    fn setup() {
+        INIT.call_once(|| {
+            pretty_env_logger::init();
+        });
+    }
 
     #[test]
-    fn simple_dot_bsv() -> Result<(), Box<dyn std::error::Error>> {
+    fn simple_dot_bsv_test() -> Result<(), Box<dyn std::error::Error>> {
+        setup();
         let working_dir = std::env::current_dir().unwrap().join("examples/simple");
 
-        pretty_env_logger::init();
         std::env::set_var("RUST_LOG", "trace");
 
         let project = load_project(Some(working_dir))?;
@@ -132,6 +155,25 @@ mod test {
         assert_eq!(builder.unit_test_count(), 1);
         assert_eq!(builder.test_count(), 1);
         assert_eq!(builder.all_tests_passed(), true);
+
+        Ok(())
+    }
+
+    #[test]
+    fn simple_dot_bsv_build() -> Result<(), Box<dyn std::error::Error>> {
+        setup();
+        let working_dir = std::env::current_dir().unwrap().join("examples/simple");
+
+        std::env::set_var("RUST_LOG", "trace");
+
+        let project = load_project(Some(working_dir))?;
+
+        let builder = Builder::find_dependencies(&project, Builder::new())
+            .and_then(|builder| Builder::find_modules(&project, builder))
+            .and_then(|builder: Builder| Builder::find_top_modules(&project, builder))
+            .and_then(|builder| Builder::build_verilog(&project, builder))?;
+
+        assert_eq!(builder.top_module_count(), 1);
 
         Ok(())
     }

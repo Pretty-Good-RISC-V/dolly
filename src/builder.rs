@@ -14,6 +14,7 @@ pub struct Builder {
     modules: HashSet<path::PathBuf>,
     unit_tests: Vec<BuildTarget>,
     tests: Vec<BuildTarget>,
+    top_modules: Vec<String>,
 
     all_tests_passed: bool,
 }
@@ -24,6 +25,7 @@ impl Builder {
             modules: HashSet::<_>::new(),
             unit_tests: Vec::<_>::new(),
             tests: Vec::<_>::new(),
+            top_modules: Vec::<_>::new(),
             all_tests_passed: false,
         }
     }
@@ -34,6 +36,10 @@ impl Builder {
 
     pub fn test_count(&self) -> usize {
         self.tests.len()
+    }
+
+    pub fn top_module_count(&self) -> usize {
+        self.top_modules.len()
     }
 
     pub fn all_tests_passed(&self) -> bool {
@@ -128,6 +134,93 @@ impl Builder {
         } else {
             None
         }
+    }
+
+    pub fn find_top_modules(project: &Project, builder: Builder) -> Result<Builder, Box<dyn std::error::Error>> {
+        let re = Regex::new(r"//!topmodule\s+(\w*)\s*")?;
+        let mut builder = builder;
+        let top_module_path = project.root_path().join("src").join(format!("{}.bsv", project.package.name.to_case(Case::Pascal)));
+
+        let contents = fs::read_to_string(top_module_path)?;
+        builder.top_modules = contents
+            .lines()
+            .into_iter()
+            .flat_map(|line| re.captures(line))
+            .map(|capture| capture[1].to_string())
+            .collect();
+
+        Ok(builder)
+    }
+
+    pub fn build_verilog(project: &Project, builder: Builder) -> Result<Builder, Box<dyn std::error::Error>> {
+        let top_module_path = project.root_path().join("src").join(format!("{}.bsv", project.package.name.to_case(Case::Pascal)));
+        if builder.top_modules.len() == 0 {
+            warn!("Warning - no top modules found in {:?}", top_module_path);
+        }
+
+        // Module path creation
+        let mut module_path_string: std::ffi::OsString = "%/Libraries".into();
+        let colon: std::ffi::OsString = ":".into();
+        for module in &builder.modules {
+            module_path_string.push(&colon);
+            module_path_string.push(module.as_os_str());
+        }
+
+        let build_root = project.root_path().join("target");
+
+        for top_module in &builder.top_modules {
+            let build_target = BuildTarget {
+                path: top_module_path.clone(),
+                top_module: Some(top_module.clone()),
+            };
+
+            // Create the path object inside the target directory that matches the test path stem.
+            let build_path = build_root.join(top_module);
+
+            // Create the test build path if necessary.
+            if !build_path.exists() {
+                fs::create_dir_all(&build_path)?;
+            }
+
+            trace!("Compile current dir: {:?}", build_path.as_path());
+            trace!("Compile source: {:?}", &build_target.path);
+
+            let output = process::Command::new("bsc")
+                // output directory for .bo and .ba files
+                .arg("-bdir")
+                .arg(&build_path)
+                // output directory for .v files
+                .arg("-vdir")
+                .arg(&build_path)
+                // specify paths to modules/sources
+                .arg("-p")
+                .arg(&module_path_string)
+                // compile BSV generating Verilog
+                .arg("-verilog")
+                // check and recompile packages that are not up to date
+                .arg("-u")
+                // Specify a module to elaborate
+                .arg("-g")
+                .arg(&top_module)
+                // Sshhhh
+                .arg("-quiet")
+                // The source file
+                .arg(&build_target.path)
+                .output()?; 
+
+            if !output.status.success() {
+                error!(
+                    "Compile failed {}",
+                    std::str::from_utf8(output.stdout.as_slice()).unwrap()
+                );
+                return Err(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "Compile failed",
+                )));
+            }       
+        }
+
+        Ok(builder)
     }
 
     pub fn find_tests(

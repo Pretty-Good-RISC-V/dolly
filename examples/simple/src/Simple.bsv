@@ -7,6 +7,7 @@ interface Simple;
     method Bool isHookedUp;
 endinterface
 
+//!topmodule mkSimple
 module mkSimple(Simple);
     AnotherModule anotherModule <- mkAnotherModule;
     SecondModule secondModule <- mkSecondModule;
