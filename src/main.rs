@@ -113,7 +113,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 Err(Box::new(std::io::Error::new(
                     std::io::ErrorKind::Other,
-                    "No all tests passed",
+                    "Not all tests passed",
                 )))
             }
         }

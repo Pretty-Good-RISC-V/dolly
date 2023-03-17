@@ -467,6 +467,7 @@ impl Builder {
                 );
                 Ok(true)
             } else {
+                println!("{}", stdout);
                 println!(
                     "Test: {} -- {}.",
                     target_executable.file_stem().unwrap().to_string_lossy(),
