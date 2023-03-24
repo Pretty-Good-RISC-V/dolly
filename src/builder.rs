@@ -331,6 +331,10 @@ impl Builder {
             // output directory for .bo and .ba files
             .arg("-bdir")
             .arg(&test_build_path)
+            // generate schedule file
+            .arg("-info-dir")
+            .arg(&test_build_path)
+            .arg("-show-schedule")
             // specify paths to modules/sources
             .arg("-p")
             .arg(module_path_string)
@@ -392,9 +396,10 @@ impl Builder {
             // working directory for relative file paths during elaboration
             .arg("-fdir")
             .arg(&test_build_path)
-            // output directory for informational files
+            // generate schedule file
             .arg("-info-dir")
             .arg(&test_build_path)
+            .arg("-show-schedule")
             // output directory for Bluesim intermediate files
             .arg("-simdir")
             .arg(&test_build_path)
