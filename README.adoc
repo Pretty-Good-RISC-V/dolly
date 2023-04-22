@@ -112,7 +112,7 @@ Will generate target/mkFirstModule/mkFirstModule.v.
 
 Dolly has several directives that can be specified to modify certain dolly behavior.
 
-=== //!topmodule mkE001_tb
+=== //!topmodule TestBenchName
 
 The !topmodule directive will inform dolly of the name of the topmodule for the given testbench instead of the default 'mkTopModule'.
 
