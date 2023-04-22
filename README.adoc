@@ -35,10 +35,10 @@ Dolly looks in this file for the 'name' property inside the 'package' section.  
 
 [source]
 ----
-//!submodule submodule1
-//!submodule submodule2
+    //!submodule submodule1
+    //!submodule submodule2
 
-... other BSV source here ...
+    ... other BSV source here ...
 ----
 
 Dolly will use directives that start with '//!submodule <submodulename>' to inform the BSV compiler about additional submodules.  In the above example, the BSV compiler will be told about the 'submodule1' and 'submodule2' directories.  This process is recursive - dolly will look for a file named 'submodule1.bsv' inside the submodule1 directory and will again parse that file looking for submodule directives.  
@@ -84,13 +84,29 @@ $ dolly test
 
 === Generating Verilog
 
-To generate Verilog from the project's top module, run Dolly using the 'verilog' command.
+To generate Verilog from the project's top module, run Dolly using the 'build' command.
 
 [shell]
 ====
-$ dolly verilog
-
+$ dolly build
 ====
+
+The verilog files will be located in the target/<topmodule>/<topmodule>.v (where <topmodule> is the topmodule name specified in the src/<packagename>.bsv)
+
+For example, if your project is named "MyProject", the topmodules specified in src/MyProject.bsv will be used to generate Verilog.
+
+[source]
+====
+    //!submodule Submodule1
+    //!submodule Submodule2
+
+    //!topmodule mkFirstModule
+    module mkFirstModule(Empty);
+        // Module source here
+    endmodule
+====
+
+Will generate target/mkFirstModule/mkFirstModule.v.
 
 == Dolly in-source directives
 
@@ -102,15 +118,15 @@ The !topmodule directive will inform dolly of the name of the topmodule for the 
 
 For example, to specify that the top module for a particular test bench is name mkTestBench instead of the default (mkTopModule), use the following:
 
-[code]
+[source]
 ====
-//!topmodule mkTestBench
+    //!topmodule mkTestBench
 
-module mkTestBench(Empty);
-    rule run_it;
-        // Required for test to pass.
-        $display(">>>PASS");
-        $finish();
-    endrule
-endmodule
+    module mkTestBench(Empty);
+        rule run_it;
+            // Required for test to pass.
+            $display(">>>PASS");
+            $finish();
+        endrule
+    endmodule
 ====
