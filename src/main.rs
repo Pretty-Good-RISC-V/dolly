@@ -177,4 +177,26 @@ mod test {
 
         Ok(())
     }
+
+    #[test]
+    fn bdpi_test() -> Result<(), Box<dyn std::error::Error>> {
+        setup();
+        let working_dir = std::env::current_dir().unwrap().join("examples/bdpi_rust");
+
+        std::env::set_var("RUST_LOG", "trace");
+
+        let project = load_project(Some(working_dir))?;
+
+        let builder = Builder::find_dependencies(&project, Builder::new())
+            .and_then(|builder| Builder::find_modules(&project, builder))
+            .and_then(|builder: Builder| Builder::find_tests(&project, builder))
+            .and_then(|builder| Builder::run_tests(&project, builder))?;
+
+        assert_eq!(builder.unit_test_count(), 0);
+        assert_eq!(builder.test_count(), 1);
+        assert_eq!(builder.all_tests_passed(), true);
+    
+        Ok(())
+    }
+
 }

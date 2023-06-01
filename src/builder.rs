@@ -8,6 +8,7 @@ use std::{collections::HashSet, fs, path, process, str};
 struct BuildTarget {
     path: path::PathBuf,
     top_module: Option<String>, // Top module found in test (or the default top module name if None)
+    extra_libraries: HashSet<path::PathBuf>,
 }
 
 pub struct Builder {
@@ -15,6 +16,8 @@ pub struct Builder {
     unit_tests: Vec<BuildTarget>,
     tests: Vec<BuildTarget>,
     top_modules: Vec<String>,
+
+    extra_libraries: HashSet<path::PathBuf>,
 
     all_tests_passed: bool,
 }
@@ -26,18 +29,22 @@ impl Builder {
             unit_tests: Vec::<_>::new(),
             tests: Vec::<_>::new(),
             top_modules: Vec::<_>::new(),
+            extra_libraries: HashSet::<_>::new(),
             all_tests_passed: false,
         }
     }
 
+    #[cfg(test)]
     pub fn unit_test_count(&self) -> usize {
         self.unit_tests.len()
     }
 
+    #[cfg(test)]
     pub fn test_count(&self) -> usize {
         self.tests.len()
     }
 
+    #[cfg(test)]
     pub fn top_module_count(&self) -> usize {
         self.top_modules.len()
     }
@@ -59,6 +66,7 @@ impl Builder {
     ) -> Result<Builder, Box<dyn std::error::Error>> {
         let mut builder = builder;
         let re = Regex::new(r"//!submodule\s+(\w*)\s*")?;
+        let extra_library_re = Regex::new(r"//!extra_library\s+(\S*)\s*")?;
 
         let mut remaining_paths = Vec::<path::PathBuf>::new();
         remaining_paths.push(project.root_path().join("src"));
@@ -86,10 +94,11 @@ impl Builder {
                 }
             };
 
+            // Check for a <module>.bsv
             let mod_dot_bsv = current_module_path.join(submodule_source);
             if mod_dot_bsv.exists() {
                 // Open the file and look for modules that haven't been encountered
-                let submodules: HashSet<path::PathBuf> = fs::read_to_string(mod_dot_bsv)?
+                let submodules: HashSet<path::PathBuf> = fs::read_to_string(&mod_dot_bsv)?
                     .lines()
                     .into_iter()
                     // map from &str -> Option<Capture> matching the regex
@@ -104,6 +113,25 @@ impl Builder {
                 // Add submodules to the array of modules to be processed.
                 for submodule in submodules {
                     remaining_paths.push(submodule);
+                }
+
+                // BUGBUG: combine this with the above so the file isn't being processed twice.
+                let extra_libraries: HashSet<path::PathBuf> = fs::read_to_string(&mod_dot_bsv)?
+                    .lines()
+                    .into_iter()
+                    // map from &str -> Option<Capture> matching the regex
+                    .flat_map(|line| {
+                        extra_library_re.captures(line)
+                    })
+                    // Map from capture to the local module path
+                    .map(|capture| current_module_path.join(&capture[1]))
+                    // Filter out paths that have already been encountered
+                    .filter(|module_path| !builder.modules.contains(module_path))
+                    // Collect the results
+                    .collect();
+
+                for extra_library in extra_libraries {
+                    builder.extra_libraries.insert(extra_library.canonicalize()?);
                 }
             }
         }
@@ -172,6 +200,7 @@ impl Builder {
             let build_target = BuildTarget {
                 path: top_module_path.clone(),
                 top_module: Some(top_module.clone()),
+                extra_libraries: builder.extra_libraries.clone(),
             };
 
             // Create the path object inside the target directory that matches the test path stem.
@@ -259,6 +288,7 @@ impl Builder {
                     BuildTarget {
                         path: path_buf,
                         top_module,
+                        extra_libraries: builder.extra_libraries.clone(),
                     }
                 })
                 .inspect(|test_definition| trace!("Unit Test found: {:?}", &test_definition.path))
@@ -293,6 +323,7 @@ impl Builder {
                 BuildTarget {
                     path: path_buf,
                     top_module,
+                    extra_libraries: builder.extra_libraries.clone(),
                 }
             })
             .inspect(|test_definition| trace!("Test found: {:?}", &test_definition.path))
@@ -418,6 +449,16 @@ impl Builder {
         // Remove C++ warnings on Mac related to deprecated function usage (e.g. sprintf)
         #[cfg(any(unix))]
         let cmd = cmd.arg("-Xc++").arg("-Wno-deprecated-declarations");
+
+        // Add any extra libraries.
+        let cmd = {
+            let mut cmd = cmd;
+            for extra_library in &target.extra_libraries {
+                cmd = cmd.arg(extra_library);    
+            }
+    
+            cmd
+        };
 
         let child = cmd.spawn()?;
 
