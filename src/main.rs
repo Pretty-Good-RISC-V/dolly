@@ -3,7 +3,7 @@
 
 use clap::{Parser, Subcommand};
 use log::{error, trace};
-use std::{path, process};
+use std::path;
 
 mod builder;
 use builder::Builder;
@@ -91,7 +91,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .and_then(|builder| Builder::build_verilog(&project, builder))?;
 
             Ok(())
-        },
+        }
         Commands::Clean { name } => {
             let project = load_project(name.clone())?;
 
@@ -130,7 +130,7 @@ mod test {
     use std::sync::Once;
 
     static INIT: Once = Once::new();
-    
+
     /// Setup function that is only run once, even if called multiple times.
     fn setup() {
         INIT.call_once(|| {
@@ -195,8 +195,7 @@ mod test {
         assert_eq!(builder.unit_test_count(), 0);
         assert_eq!(builder.test_count(), 1);
         assert_eq!(builder.all_tests_passed(), true);
-    
+
         Ok(())
     }
-
 }

@@ -72,9 +72,8 @@ impl Builder {
         remaining_paths.push(project.root_path().join("src"));
 
         let mut first_path = true;
-        while !remaining_paths.is_empty() {
-            let current_module_path = remaining_paths.pop().unwrap();
 
+        while let Some(current_module_path) = remaining_paths.pop() {
             trace!("Processing module {:?}", &current_module_path);
             builder.modules.insert(current_module_path.clone());
 
@@ -100,7 +99,6 @@ impl Builder {
                 // Open the file and look for modules that haven't been encountered
                 let submodules: HashSet<path::PathBuf> = fs::read_to_string(&mod_dot_bsv)?
                     .lines()
-                    .into_iter()
                     // map from &str -> Option<Capture> matching the regex
                     .flat_map(|line| re.captures(line))
                     // Map from capture to the local module path
@@ -118,11 +116,8 @@ impl Builder {
                 // BUGBUG: combine this with the above so the file isn't being processed twice.
                 let extra_libraries: HashSet<path::PathBuf> = fs::read_to_string(&mod_dot_bsv)?
                     .lines()
-                    .into_iter()
                     // map from &str -> Option<Capture> matching the regex
-                    .flat_map(|line| {
-                        extra_library_re.captures(line)
-                    })
+                    .flat_map(|line| extra_library_re.captures(line))
                     // Map from capture to the local module path
                     .map(|capture| current_module_path.join(&capture[1]))
                     // Filter out paths that have already been encountered
@@ -131,7 +126,9 @@ impl Builder {
                     .collect();
 
                 for extra_library in extra_libraries {
-                    builder.extra_libraries.insert(extra_library.canonicalize()?);
+                    builder
+                        .extra_libraries
+                        .insert(extra_library.canonicalize()?);
                 }
             }
         }
@@ -145,7 +142,6 @@ impl Builder {
         if let Ok(contents) = fs::read_to_string(path) {
             let top_modules: Vec<String> = contents
                 .lines()
-                .into_iter()
                 .flat_map(|line| re.captures(line))
                 .map(|capture| capture[1].to_string())
                 .collect();
@@ -164,15 +160,20 @@ impl Builder {
         }
     }
 
-    pub fn find_top_modules(project: &Project, builder: Builder) -> Result<Builder, Box<dyn std::error::Error>> {
+    pub fn find_top_modules(
+        project: &Project,
+        builder: Builder,
+    ) -> Result<Builder, Box<dyn std::error::Error>> {
         let re = Regex::new(r"//!topmodule\s+(\w*)\s*")?;
         let mut builder = builder;
-        let top_module_path = project.root_path().join("src").join(format!("{}.bsv", project.package.name.to_case(Case::Pascal)));
+        let top_module_path = project.root_path().join("src").join(format!(
+            "{}.bsv",
+            project.package.name.to_case(Case::Pascal)
+        ));
 
         let contents = fs::read_to_string(top_module_path)?;
         builder.top_modules = contents
             .lines()
-            .into_iter()
             .flat_map(|line| re.captures(line))
             .map(|capture| capture[1].to_string())
             .collect();
@@ -180,9 +181,15 @@ impl Builder {
         Ok(builder)
     }
 
-    pub fn build_verilog(project: &Project, builder: Builder) -> Result<Builder, Box<dyn std::error::Error>> {
-        let top_module_path = project.root_path().join("src").join(format!("{}.bsv", project.package.name.to_case(Case::Pascal)));
-        if builder.top_modules.len() == 0 {
+    pub fn build_verilog(
+        project: &Project,
+        builder: Builder,
+    ) -> Result<Builder, Box<dyn std::error::Error>> {
+        let top_module_path = project.root_path().join("src").join(format!(
+            "{}.bsv",
+            project.package.name.to_case(Case::Pascal)
+        ));
+        if builder.top_modules.is_empty() {
             warn!("Warning - no top modules found in {:?}", top_module_path);
         }
 
@@ -230,7 +237,7 @@ impl Builder {
                 .arg("-u")
                 // Specify a module to elaborate
                 .arg("-g")
-                .arg(&top_module)
+                .arg(top_module)
                 // Sshhhh
                 .arg("-quiet")
                 // The source file
@@ -239,11 +246,14 @@ impl Builder {
 
             if let Err(e) = output {
                 if let std::io::ErrorKind::NotFound = e.kind() {
-                    return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, "Unable to locate 'bsc' program.")))
+                    return Err(Box::new(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        "Unable to locate 'bsc' program.",
+                    )));
                 } else {
                     println!("ERROR: Attempting to locate 'bsc' failed.");
                     return Err(Box::new(e));
-                } 
+                }
             }
 
             let output = output.unwrap();
@@ -256,7 +266,7 @@ impl Builder {
                     std::io::ErrorKind::Other,
                     "Compile failed",
                 )));
-            }       
+            }
         }
 
         Ok(builder)
@@ -397,11 +407,14 @@ impl Builder {
 
         if let Err(e) = cmd {
             if let std::io::ErrorKind::NotFound = e.kind() {
-                return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, "Unable to locate 'bsc' program.")))
+                return Err(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "Unable to locate 'bsc' program.",
+                )));
             } else {
                 println!("ERROR: Attempting to locate 'bsc' failed.");
                 return Err(Box::new(e));
-            } 
+            }
         }
 
         let cmd = cmd.unwrap();
@@ -467,16 +480,16 @@ impl Builder {
             .arg("-quiet");
 
         // Remove C++ warnings on Mac related to deprecated function usage (e.g. sprintf)
-        #[cfg(any(unix))]
+        #[cfg(unix)]
         let cmd = cmd.arg("-Xc++").arg("-Wno-deprecated-declarations");
 
         // Add any extra libraries.
         let cmd = {
             let mut cmd = cmd;
             for extra_library in &target.extra_libraries {
-                cmd = cmd.arg(extra_library);    
+                cmd = cmd.arg(extra_library);
             }
-    
+
             cmd
         };
 
@@ -484,11 +497,14 @@ impl Builder {
 
         if let Err(e) = child {
             if let std::io::ErrorKind::NotFound = e.kind() {
-                return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, "Unable to locate 'bsc' program.")))
+                return Err(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "Unable to locate 'bsc' program.",
+                )));
             } else {
                 println!("ERROR: Attempting to locate 'bsc' failed.");
                 return Err(Box::new(e));
-            } 
+            }
         }
 
         let child = child.unwrap();
