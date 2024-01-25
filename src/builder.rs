@@ -235,8 +235,18 @@ impl Builder {
                 .arg("-quiet")
                 // The source file
                 .arg(&build_target.path)
-                .output()?; 
+                .output();
 
+            if let Err(e) = output {
+                if let std::io::ErrorKind::NotFound = e.kind() {
+                    return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, "Unable to locate 'bsc' program.")))
+                } else {
+                    println!("ERROR: Attempting to locate 'bsc' failed.");
+                    return Err(Box::new(e));
+                } 
+            }
+
+            let output = output.unwrap();
             if !output.status.success() {
                 error!(
                     "Compile failed {}",
@@ -383,8 +393,18 @@ impl Builder {
             //                .arg("-print-flags")
             // The source file
             .arg(&target.path)
-            .spawn()?;
+            .spawn();
 
+        if let Err(e) = cmd {
+            if let std::io::ErrorKind::NotFound = e.kind() {
+                return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, "Unable to locate 'bsc' program.")))
+            } else {
+                println!("ERROR: Attempting to locate 'bsc' failed.");
+                return Err(Box::new(e));
+            } 
+        }
+
+        let cmd = cmd.unwrap();
         trace!("Compile current dir: {:?}", test_build_path.as_path());
         trace!("Compile source: {:?}", &target.path);
 
@@ -460,8 +480,18 @@ impl Builder {
             cmd
         };
 
-        let child = cmd.spawn()?;
+        let child = cmd.spawn();
 
+        if let Err(e) = child {
+            if let std::io::ErrorKind::NotFound = e.kind() {
+                return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, "Unable to locate 'bsc' program.")))
+            } else {
+                println!("ERROR: Attempting to locate 'bsc' failed.");
+                return Err(Box::new(e));
+            } 
+        }
+
+        let child = child.unwrap();
         trace!("Linking: {:?}", &target.path);
 
         let output = child.wait_with_output()?;
