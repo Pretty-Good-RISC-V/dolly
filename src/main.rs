@@ -79,16 +79,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     pretty_env_logger::init();
     let cli = Cli::parse();
 
-    // Ensure bsc command is available
-    if let Err(e) = process::Command::new("bsc").spawn() {
-        if let std::io::ErrorKind::NotFound = e.kind() {
-            return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, "Unable to locate 'bsc' program.")))
-        } else {
-            println!("ERROR: Attempting to locate 'bsc' failed.");
-            return Err(Box::new(e));
-        }
-    }
-
     match &cli.command {
         Commands::Build { name } => {
             let project = load_project(name.clone())?;
