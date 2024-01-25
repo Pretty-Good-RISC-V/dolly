@@ -1,8 +1,6 @@
 = Dolly - an opinionated build system for Bluespec SystemVerilog projects.
 
-************************************************************************************************
-** NOTE: This repository has been moved to https://gitlab.com/pretty-good-risc-v/dolly[here]. **
-************************************************************************************************
+IMPORTANT: This repository has been moved to https://gitlab.com/pretty-good-risc-v/dolly[here]. **
 
 Dolly is an attempt to simplify building BSV projects by formalizing a simple project structure that allows the build system to quickly find modules and test benches.  It's written in Rust and is designed to very roughly approximate how Rust's own Cargo build system works.
 
